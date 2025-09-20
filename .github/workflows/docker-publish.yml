@@ -1,0 +1,56 @@
+name: Build and publish multi‑arch Caddy image
+
+# Run this workflow on pushes and pull requests to the main branch.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# Environment variables shared across jobs. IMAGE_NAME expands to `ghcr.io/<owner>/<repo>`.
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    # Use the latest Ubuntu runner provided by GitHub.
+    runs-on: ubuntu-latest
+
+    # Grant this job permission to read the repository content and publish packages.
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # Check out the repository so the Dockerfile and other project files are available.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Set up QEMU to enable cross‑platform emulation. This is required for arm64 builds on x86 hosts.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # Set up Buildx, the extended build driver for Docker that supports multi‑platform builds.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Authenticate to GitHub Container Registry using the GitHub actor and the automatically provided token.
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build the Docker image for amd64 and arm64 architectures and push it to the registry.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
